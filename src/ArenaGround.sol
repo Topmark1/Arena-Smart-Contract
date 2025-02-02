@@ -24,6 +24,7 @@ contract ArenaGround {
     uint256 public accumulatedFee;
     uint256 public fee ;
     uint256 public fixedNonArenaJoinRewardCap;
+    uint256 public launchTime;
 
     mapping(address => uint256) public iconValues;
     // to avoid frontrunning update when each icon calls it to ensure two icons cant call within same seconds or more
@@ -32,19 +33,12 @@ contract ArenaGround {
     address owner ;
     
     constructor(
-        //address arenaKingAddress
+        uint256 _launchTime
     ) {
-        arenaKingAddress =  address(1111); // TODO: use for now but it should come from constructor
-
-        iconValues[address(1)] = 100e18; //topmark testss
-        iconValues[address(2)] = 10e18;
-        iconValues[address(3)] = 10e18;
-        iconValues[address(4)] = 10e18;
-        iconValues[address(5)] = 10e18;
-        // TODO: msg.sender
-        owner = address(777); //msg.sender;
+        launchTime = _launchTime + block.timestamp;
+        owner = msg.sender; //arenaKingAddress
     }
-
+ 
     function deposit( uint256 amount ) public payable {
         if(msg.sender == owner){
             fixedNonArenaJoinRewardCap += msg.value;
@@ -79,7 +73,7 @@ contract ArenaGround {
         uint256 arenaAmount,
         uint256 lockTimer 
     ) public {
-        require( arenaAmount > 10000 && lockTimer > 30 , "Invalid arenaAmount or lockTimer");
+        require( arenaAmount >= 1e15 && lockTimer > 30 , "Invalid arenaAmount or lockTimer");
         uint256 creationTime = block.timestamp;
         uint256 currentArenaValue = arenaAmount;
         address iconInCharge = msg.sender;
@@ -148,27 +142,37 @@ contract ArenaGround {
         currentCall[arenaNumber] = block.timestamp;
 
     }
+    ///// Views
     function checkArenaAffairs(
         uint256 arenaNumber
         ) public view returns (ArenaInfo memory) {
         return arena[arenaNumber];
     }
+       function ownerView() public view returns (address) {
+        return owner;
+    }
 
     /////Admin Setters 
     function setFixedNonArenaJoinReward(uint256 _fixedNonArenaJoinReward) external{
-        require(owner == msg.sender, "Authorized Caller");
+        require(owner == msg.sender, "Unauthorized Caller");
         fixedNonArenaJoinReward = _fixedNonArenaJoinReward;
     }
     function setPriceClaimDelay(uint256 _priceClaimDelay) external{
-        require(owner == msg.sender, "Authorized Caller");
+        require(owner == msg.sender, "Unauthorized Caller");
         priceClaimDelay = _priceClaimDelay;
     }
     function setFee(uint256 _newfee) external{
-        require(owner == msg.sender, "Authorized Caller");
+        require(owner == msg.sender, "Unauthorized Caller");
         fee = _newfee;
     }
+    function activateWhitelist(address whitelist, uint256 value) public{
+        require(owner == msg.sender, "Unauthorized Caller");
+        require(block.timestamp < launchTime);
+        iconValues[whitelist] = value; 
+    }
+        
     function setNewOwner(address _newOwner) external{
-        require(owner == msg.sender, "Authorized Caller");
+        require(owner == msg.sender, "Unauthorized Caller");
         owner = _newOwner;
     }
 }

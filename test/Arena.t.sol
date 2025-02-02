@@ -17,12 +17,28 @@ contract ArenaTest is Test {
     uint256 public arenaCount;
     address public arenaKingAddress;
     uint256 public fixedNonArenaJoinReward;
+    address owner ;
 
     function setUp() public {    
-        arenaGround = new ArenaGround();
+        arenaGround = new ArenaGround(30 days);
+        // mg.sender not same as address (this), owner is address(this)
+        owner = arenaGround.ownerView();
+        
+
+        vm.prank(owner);
+        arenaGround.activateWhitelist(address(1),  100e18);
+        vm.prank(owner);
+        arenaGround.activateWhitelist(address(2),  10e18);
+        vm.prank(owner);
+        arenaGround.activateWhitelist(address(3),  10e18);
+        arenaGround.activateWhitelist(address(4),  10e18);
+        arenaGround.activateWhitelist(address(5),  10e18);
         topmark = address(1);
         alex = address(2);
         bob = address(3);
+        vm.deal(msg.sender, 200e18);
+        vm.deal(owner, 200e18);   
+
     }
 
     function test_CheckCheck() public view {
@@ -31,9 +47,11 @@ contract ArenaTest is Test {
     }
     function test_DepositAndWithdraw() public {
         //TODO test with eth or token deposit
+        vm.prank(msg.sender);
         arenaGround.deposit{value:30e18}(30e18);
+        vm.prank(msg.sender);
         arenaGround.withdraw(23e18, msg.sender);
-        assertEq( arenaGround.iconValues(address(this)) ,7e18 );
+        assertEq( arenaGround.iconValues(address(arenaGround)) ,7e18 );
     }
 
     function test_SetArena() public {
@@ -78,13 +96,21 @@ contract ArenaTest is Test {
         assertEq( arenaGround.iconValues(bob) , 35e18 );
     }
     function test_JoinArenaTimeExpireForArenaSetter() public {
+        assertEq( arenaGround.iconValues(topmark) , 100e18 );
+        vm.prank(owner); 
+        arenaGround.deposit{value:150e18}(150e18);// value donated to contract by owner to encourage participation
+        vm.prank(owner);
+        arenaGround.setFixedNonArenaJoinReward(1e14);
+
         vm.prank(topmark);
         arenaGround.SetArena(5e18 , 600 );
         vm.warp(block.timestamp + 601);
 
         vm.prank(topmark);
         arenaGround.JoinArena( 1 , 0 ); // pass in any amount to claim price, it would not be lost
-        assertEq( arenaGround.iconValues(topmark) , 100e18 );
+        assertEq( arenaGround.iconValues(topmark) , 100e18 + 1e14 ); // Icon has made profit
+        vm.prank(topmark);
+        arenaGround.withdraw(100e18 + 1e14, topmark);
     }
     function test_JoinArenaTimeExpireForArenaIcon() public {
          assertEq( arenaGround.iconValues(bob) , 10e18 );
