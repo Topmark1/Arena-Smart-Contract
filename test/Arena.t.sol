@@ -27,11 +27,12 @@ contract ArenaTest is Test {
 
     function test_CheckCheck() public view {
         assertEq(arenaGround.fixedNonArenaJoinReward(), 10000); 
-        assertEq( arenaGround.iconValues(topmark), 1e18); 
+        assertEq( arenaGround.iconValues(topmark), 100e18); 
     }
     function test_DepositAndWithdraw() public {
-        arenaGround.Deposit(30e18);
-        arenaGround.Withdraw(23e18);
+        //TODO test with eth or token deposit
+        arenaGround.deposit{value:30e18}(30e18);
+        arenaGround.withdraw(23e18, msg.sender);
         assertEq( arenaGround.iconValues(address(this)) ,7e18 );
     }
 

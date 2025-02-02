@@ -10,38 +10,70 @@ contract ArenaGround {
         uint256 lockTimer;
         address iconInCharge;
     }
-
+ 
     mapping(uint256 => ArenaInfo) public arena;
     uint256 public arenaCount;
     address public arenaKingAddress;
 
+    ///TODO admin reset depending on contract active
     // to encourage creating an arena which earns reward if no icons join
     uint256 public fixedNonArenaJoinReward = 10000;
     // from the last time anyone join or set arena it must cross 600 seconds by all means
     uint256 public priceClaimDelay = 600 seconds;
+    // TODO: withdrawal fee percent 10**6 precision, fixed fee for now
+    uint256 public accumulatedFee;
+    uint256 public fee ;
+    uint256 public fixedNonArenaJoinRewardCap;
+
     mapping(address => uint256) public iconValues;
     // to avoid frontrunning update when each icon calls it to ensure two icons cant call within same seconds or more
     // i.e if it is arena 1 the during creation update currentCall[1] = block.timestamp and validate before subsequent call to avoid time duplicate
     mapping(uint256 => uint256) public currentCall;
+    address owner ;
     
     constructor(
         //address arenaKingAddress
     ) {
-         arenaKingAddress =  address(1111); // TODO: use for now but it should come from constructor
+        arenaKingAddress =  address(1111); // TODO: use for now but it should come from constructor
+
         iconValues[address(1)] = 100e18; //topmark testss
         iconValues[address(2)] = 10e18;
         iconValues[address(3)] = 10e18;
         iconValues[address(4)] = 10e18;
         iconValues[address(5)] = 10e18;
+        // TODO: msg.sender
+        owner = address(777); //msg.sender;
     }
 
-    function Deposit( uint256 amount ) public {
+    function deposit( uint256 amount ) public payable {
+        if(msg.sender == owner){
+            fixedNonArenaJoinRewardCap += msg.value;
+             iconValues[address(this)] += msg.value;
+             return ;
+        }
         /// TODO: token conversion code to contract icon value
+        require(msg.value == amount,"Amount Error");
         iconValues[msg.sender] += amount;
+        iconValues[address(this)] += amount;
     }
-    function Withdraw( uint256 amount ) public {
+    function withdraw(uint256 amount, address recipient) public {
+       if(msg.sender == owner){
+            accumulatedFee -= amount;
+            (bool success, ) = recipient.call{value: amount}("");
+            require(success, "Transfer failed");
+            return ;
+        }
+        // Ensure the sender has enough balance to withdraw
+        require(iconValues[msg.sender] >= amount, "Insufficient balance");
+
+        // Subtract the requested amount from sender's balance
         iconValues[msg.sender] -= amount;
-        /// icon value conversion code to token value
+        iconValues[address(this)] -= (amount-fee);
+        accumulatedFee += fee;
+
+         // Send the requested amount of Ether to the sender
+        (bool success2, ) = recipient.call{value: amount - fee}("");
+        require(success2, "Transfer failedd");
     }
     function SetArena(
         uint256 arenaAmount,
@@ -53,7 +85,7 @@ contract ArenaGround {
         address iconInCharge = msg.sender;
         
         iconValues[msg.sender] -= arenaAmount;
-        iconValues[address(this)] += arenaAmount;
+        
         uint256 dumbyArenaCount = 1;
         //to avoid arena id clash
         //look for the lowest available empty slot from 1
@@ -71,6 +103,7 @@ contract ArenaGround {
         currentCall[dumbyArenaCount] = block.timestamp;
     }
 
+    /// to participate in arrena and also used by winner to claim arena victory
     function JoinArena(
         uint256 arenaNumber, 
         uint amount
@@ -83,15 +116,15 @@ contract ArenaGround {
             //to prevent flashloan Attack of claiming price automatically when it is claimable
             require ( block.timestamp - arenaToJoin.creationTime  > priceClaimDelay ); 
             
-            iconValues[address(this)] -= arenaToJoin.currentArenaValue;
             iconValues[msg.sender] += arenaToJoin.currentArenaValue; // claim price
-            if (arenaToJoin.currentArenaValue == arenaToJoin.arenaAmount && iconValues[address(this)] >= fixedNonArenaJoinReward ){
-                iconValues[address(this)] -= fixedNonArenaJoinReward;
+
+            if (arenaToJoin.currentArenaValue == arenaToJoin.arenaAmount && fixedNonArenaJoinRewardCap >= fixedNonArenaJoinReward ){
+                fixedNonArenaJoinRewardCap -= fixedNonArenaJoinReward;
                 iconValues[msg.sender] += fixedNonArenaJoinReward; // to encourage creating an arena which earns reward if no icons join
             }
             require ( msg.sender == arenaToJoin.iconInCharge , "Unauthroized Icon" );
             delete arena[arenaNumber]; /// delete arena after winning icon is settled 
-            arenaCount -= arenaCount; //update global count
+            arenaCount -= 1; //update global count
             return ;
         }
 
@@ -110,8 +143,7 @@ contract ArenaGround {
         );
 
         iconValues[msg.sender] -= amount;
-        iconValues[address(this)] += amount;  
-        //prevent multiple call at a gola to prevent attacker with mutiple entry
+        //prevent multiple call at a goal to prevent attacker with mutiple entry
         require ( block.timestamp > currentCall[arenaNumber] , "multiple call in single Seconds");
         currentCall[arenaNumber] = block.timestamp;
 
@@ -120,5 +152,23 @@ contract ArenaGround {
         uint256 arenaNumber
         ) public view returns (ArenaInfo memory) {
         return arena[arenaNumber];
+    }
+
+    /////Admin Setters 
+    function setFixedNonArenaJoinReward(uint256 _fixedNonArenaJoinReward) external{
+        require(owner == msg.sender, "Authorized Caller");
+        fixedNonArenaJoinReward = _fixedNonArenaJoinReward;
+    }
+    function setPriceClaimDelay(uint256 _priceClaimDelay) external{
+        require(owner == msg.sender, "Authorized Caller");
+        priceClaimDelay = _priceClaimDelay;
+    }
+    function setFee(uint256 _newfee) external{
+        require(owner == msg.sender, "Authorized Caller");
+        fee = _newfee;
+    }
+    function setNewOwner(address _newOwner) external{
+        require(owner == msg.sender, "Authorized Caller");
+        owner = _newOwner;
     }
 }
