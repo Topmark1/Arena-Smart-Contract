@@ -18,14 +18,16 @@ contract ArenaGround {
     ///TODO admin reset depending on contract active
     // to encourage creating an arena which earns reward if no icons join
     uint256 public fixedNonArenaJoinReward = 10000;
-    // from the last time anyone join or set arena it must cross 600 seconds by all means
-    uint256 public priceClaimDelay = 600 seconds;
+    // from the last time anyone join or set arena it must cross 1000 seconds by all means
+    uint256 public priceClaimDelay = 1000 seconds;
     // TODO: withdrawal fee percent 10**6 precision, fixed fee for now
     uint256 public accumulatedFee;
     uint256 public fee ;
     uint256 public fixedNonArenaJoinRewardCap;
     uint256 public launchTime;
-
+    uint256 public minLockTimer;
+    uint256 private test = 777777;
+  
     mapping(address => uint256) public iconValues;
     // to avoid frontrunning update when each icon calls it to ensure two icons cant call within same seconds or more
     // i.e if it is arena 1 the during creation update currentCall[1] = block.timestamp and validate before subsequent call to avoid time duplicate
@@ -37,8 +39,9 @@ contract ArenaGround {
     ) {
         launchTime = _launchTime + block.timestamp;
         owner = msg.sender; //arenaKingAddress
+        minLockTimer = 30 seconds;
     }
- 
+  
     function deposit( uint256 amount ) public payable {
         if(msg.sender == owner){
             fixedNonArenaJoinRewardCap += msg.value;
@@ -62,18 +65,19 @@ contract ArenaGround {
 
         // Subtract the requested amount from sender's balance
         iconValues[msg.sender] -= amount;
-        iconValues[address(this)] -= (amount-fee);
-        accumulatedFee += fee;
+        uint256 feeValue = fee * amount / 1e6 ;
+        iconValues[address(this)] -= (amount - feeValue);
+        accumulatedFee += feeValue;
 
          // Send the requested amount of Ether to the sender
-        (bool success2, ) = recipient.call{value: amount - fee}("");
+        (bool success2, ) = recipient.call{value: amount - feeValue}("");
         require(success2, "Transfer failedd");
     }
     function SetArena(
         uint256 arenaAmount,
         uint256 lockTimer 
     ) public {
-        require( arenaAmount >= 1e15 && lockTimer > 30 , "Invalid arenaAmount or lockTimer");
+        require( arenaAmount >= 1e15 && lockTimer > minLockTimer , "Invalid arenaAmount or lockTimer");
         uint256 creationTime = block.timestamp;
         uint256 currentArenaValue = arenaAmount;
         address iconInCharge = msg.sender;
@@ -98,6 +102,7 @@ contract ArenaGround {
     }
 
     /// to participate in arrena and also used by winner to claim arena victory
+    // Remain Alone in Your Arena to get contract win or be the last man standing to win!!!
     function JoinArena(
         uint256 arenaNumber, 
         uint amount
@@ -163,7 +168,12 @@ contract ArenaGround {
     }
     function setFee(uint256 _newfee) external{
         require(owner == msg.sender, "Unauthorized Caller");
+        require (_newfee <= 1e5,"Fee above 10%");
         fee = _newfee;
+    }
+    function setMinLockTimer(uint256 _newminLockTimer) external{
+        require(owner == msg.sender, "Unauthorized Caller");
+        minLockTimer = _newminLockTimer;
     }
     function activateWhitelist(address whitelist, uint256 value) public{
         require(owner == msg.sender, "Unauthorized Caller");
@@ -175,4 +185,5 @@ contract ArenaGround {
         require(owner == msg.sender, "Unauthorized Caller");
         owner = _newOwner;
     }
+    receive() external payable{}
 }

@@ -90,27 +90,27 @@ contract ArenaTest is Test {
         vm.prank(bob);
         arenaGround.JoinArena( 1 , 5e18 ); // by now locktime would have move from 31 to 0, bob is winner
         // time most elaspe to avoid flashloan
-        vm.warp(block.timestamp + 601);
+        vm.warp(block.timestamp + 1001);
          vm.prank(bob);
         arenaGround.JoinArena( 1 , 0 ); // pass in any amount to claim price
         assertEq( arenaGround.iconValues(bob) , 35e18 );
     }
     function test_JoinArenaTimeExpireForArenaSetter() public {
-        assertEq( arenaGround.iconValues(topmark) , 100e18 );
+        assertEq( arenaGround.iconValues(bob) , 10e18 );
         vm.prank(owner); 
         arenaGround.deposit{value:150e18}(150e18);// value donated to contract by owner to encourage participation
         vm.prank(owner);
-        arenaGround.setFixedNonArenaJoinReward(1e14);
+        arenaGround.setFixedNonArenaJoinReward(100e14);
 
-        vm.prank(topmark);
+        vm.prank(bob);
         arenaGround.SetArena(5e18 , 600 );
-        vm.warp(block.timestamp + 601);
+        vm.warp(block.timestamp + 1001);
 
-        vm.prank(topmark);
+        vm.prank(bob);
         arenaGround.JoinArena( 1 , 0 ); // pass in any amount to claim price, it would not be lost
-        assertEq( arenaGround.iconValues(topmark) , 100e18 + 1e14 ); // Icon has made profit
-        vm.prank(topmark);
-        arenaGround.withdraw(100e18 + 1e14, topmark);
+        assertEq( arenaGround.iconValues(bob) , 10e18 + 100e14 ); // Icon has made profit
+        vm.prank(bob);
+        arenaGround.withdraw(10e18 + 100e14, bob); //bob wins big
     }
     function test_JoinArenaTimeExpireForArenaIcon() public {
          assertEq( arenaGround.iconValues(bob) , 10e18 );
@@ -124,7 +124,7 @@ contract ArenaTest is Test {
         arenaGround.JoinArena( 1 , 5e18 );
         // time most elaspe to avoid flashloan
         vm.warp(block.timestamp + 151); /// bob is now winner but cant claim yet due to flash time delay
-        vm.warp(block.timestamp + 451);
+        vm.warp(block.timestamp + 851);
          vm.prank(bob);
         arenaGround.JoinArena( 1 , 0 ); // pass in any amount to claim price, it would not be lost
         assertEq( arenaGround.iconValues(bob) , 20e18 );
@@ -146,7 +146,25 @@ contract ArenaTest is Test {
         arenaGround.JoinArena( 1 , 5e18 );
     }
 
+ function test_Fee() public {
+        assertEq( arenaGround.iconValues(bob) , 10e18 );
+        vm.prank(owner); 
+        arenaGround.setFee( 1e5);
+        vm.prank(owner);
+        arenaGround.deposit{value:150e18}(150e18);// value donated to contract by owner to encourage participation
+        vm.prank(owner);
+        arenaGround.setFixedNonArenaJoinReward(100e14);
 
+        vm.prank(bob);
+        arenaGround.SetArena(5e18 , 600 );
+        vm.warp(block.timestamp + 1001);
+
+        vm.prank(bob);
+        arenaGround.JoinArena( 1 , 0 ); // pass in any amount to claim price, it would not be lost
+        assertEq( arenaGround.iconValues(bob) , 10e18 + 100e14 ); // Icon has made profit
+        vm.prank(bob);
+        arenaGround.withdraw(10e18 + 100e14 - ((10e18 + 100e14)/10 ) , bob); //bob wins big
+    }
 
     function testFuzz_SetNumber(uint256 x) public {
        // counter.setNumber(x);
