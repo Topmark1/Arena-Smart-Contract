@@ -1,5 +1,5 @@
 // // SPDX-License-Identifier: UNLICENSED
- pragma solidity ^0.8.13;
+ pragma solidity ^0.8.28;
 
 import "forge-std/Script.sol";
 import {ArenaGround} from "../src/ArenaGround.sol";
@@ -15,7 +15,7 @@ contract DeployArenaGround is Script {
         ArenaGround arena = new ArenaGround(31536000); // example constructor args
 
         // End deployment
-        vm.stopBroadcast();
+        //vm.stopBroadcast();
     }
 }
 // import {Script, console2} from "forge-std/Script.sol";
