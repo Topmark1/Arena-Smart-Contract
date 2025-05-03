@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 
 contract ArenaGround {
@@ -13,7 +14,6 @@ contract ArenaGround {
         uint256 creationTime;
         uint256 lockTimer;
         address iconInCharge;
-        bool bigGiveAwayAim;
     }
   
     mapping(uint256 => ArenaInfo) public arena;
@@ -21,8 +21,7 @@ contract ArenaGround {
     address public arenaKingAddress;
 
     // to encourage creating an arena which earns reward if no icons join
-    uint256 public small = 1e5; //0.1% default
-    uint256 public big = 9e7; //90% default
+    uint256 public fixedNonArenaJoinReward = 10000;
     // from the last time anyone join or set arena it must cross 1000 seconds by all means
     uint256 public priceClaimDelay = 1000 seconds;
     // TODO: withdrawal fee percent 10**6 precision, fixed fee for now
@@ -31,7 +30,7 @@ contract ArenaGround {
     uint256 public fixedNonArenaJoinRewardCap;
     uint256 public launchTime;
     uint256 public minLockTimer;
-    uint256 public minArenaAmount = 1e16;
+    uint256 public minArenaAmount = 1e15;
     uint256 private test = 777777;
   
     // test run at https://sepolia.etherscan.io/address/0xDE9C92bA7500B7ce214932dE47989CC9c858aaEa#readContract
@@ -42,45 +41,56 @@ contract ArenaGround {
     address owner ;
 
     IERC20 public token;  // Optimism token (OP)
-    
+    // Chainlink Aggregator for ETH/OP price feed
+    AggregatorV3Interface internal ethPriceFeed;
+    AggregatorV3Interface internal opPriceFeed;
+    bool allowNativeTransactions;
 
     constructor(
         uint256 _launchTime,
-        address _tokenAddress
+        address _tokenAddress,
+        address _ethPriceFeed, 
+        address _opPriceFeed
     ) {
         launchTime = _launchTime + block.timestamp;
         owner = msg.sender; //arenaKingAddress
-        minLockTimer = 24 hours;
+        minLockTimer = 30 seconds;
         token = IERC20(_tokenAddress);  // Set token address for Optimism (OP token)
+        ethPriceFeed = AggregatorV3Interface(_ethPriceFeed);
+        opPriceFeed = AggregatorV3Interface(_opPriceFeed);
     }
   
     function deposit( uint256 amount ) public payable {
+      if(msg.value > 0 && allowNativeTransactions){ //handle native deposit 
+      uint256 OPamount = ethToOp(msg.value); //OP value of native deposit TODO
+        if(msg.sender == owner){
+            fixedNonArenaJoinRewardCap += OPamount;
+             iconValues[address(this)] += OPamount;
+             return ;
+        }
+        iconValues[msg.sender] += OPamount;
+        iconValues[address(this)] += OPamount;
+      }
+      else{ //handle non native deposit 
       // Deposit OP (Optimism ERC-20 token)
         token.safeTransferFrom(msg.sender, address(this), amount);
         if(msg.sender == owner){
             fixedNonArenaJoinRewardCap += amount;
-             //iconValues[address(this)] += amount;
+             iconValues[address(this)] += amount;
              return ;
         }
         iconValues[msg.sender] += amount;
-       // iconValues[address(this)] += amount;
+        iconValues[address(this)] += amount;
+      }
     }
     function withdraw(uint256 amount, address recipient,bool nativeWithdrawal) public {
-         //OP withdrawal
+        if(nativeWithdrawal && allowNativeTransactions){
+        // convert the withdrawal value from OP to native
             if(msg.sender == owner){
-            require(amount <= accumulatedFee + fixedNonArenaJoinRewardCap, "Owner cant Withdraw Users Fund");
-                if( amount <= accumulatedFee){
-                 accumulatedFee -= amount;
-                }else{
-                fixedNonArenaJoinRewardCap -= amount;
-                //iconValues[address(this)] -= amount;
-                }
-
-            token.safeTransfer(recipient, amount); // Withdraw fee in OP token (ERC-20)
-                if (address(this).balance > 0){ // to withdraw contract donations and accidental native tokens
-                     (bool success, ) = recipient.call{value: address(this).balance}("");
-                    require(success, "Transfer failed.");
-                }
+            accumulatedFee -= amount;
+            uint256 nativeValue = opToEth(amount) ;
+            (bool success, ) = recipient.call{value: nativeValue}("");
+            require(success, "Transfer failed");
             return ;
             }
         // Ensure the sender has enough balance to withdraw
@@ -89,19 +99,39 @@ contract ArenaGround {
         // Subtract the requested amount from sender's balance
         iconValues[msg.sender] -= amount;
         uint256 feeValue = fee * amount / 1e6 ;
-        //iconValues[address(this)] -= (amount - feeValue);
+        iconValues[address(this)] -= (amount - feeValue);
+        accumulatedFee += feeValue;
+
+         // Send the requested native Value of amount of Ether to the sender
+        uint256 nativeValue = opToEth(amount - feeValue) ;
+        (bool success2, ) = recipient.call{value: nativeValue }("");
+        require(success2, "Transfer failedd");
+        }
+        else{ //OP withdrawal
+            if(msg.sender == owner){
+            accumulatedFee -= amount;
+            token.safeTransfer(recipient, amount); // Withdraw fee in OP token (ERC-20)
+            return ;
+            }
+        // Ensure the sender has enough balance to withdraw
+        require(iconValues[msg.sender] >= amount, "Insufficient balance");
+
+        // Subtract the requested amount from sender's balance
+        iconValues[msg.sender] -= amount;
+        uint256 feeValue = fee * amount / 1e6 ;
+        iconValues[address(this)] -= (amount - feeValue);
         accumulatedFee += feeValue;
 
           if (amount > 0) {
-            require(token.balanceOf(address(this)) >= (amount-feeValue), "Insufficient OP balance");
-            token.safeTransfer(recipient, (amount-feeValue));
+            require(token.balanceOf(address(this)) >= amount, "Insufficient OP balance");
+            token.safeTransfer(recipient, amount);
             }
+        }
     }
 
     function SetArena(
         uint256 arenaAmount,
-        uint256 lockTimer,
-        bool bigGiveAwayAim 
+        uint256 lockTimer 
     ) public {
         require( arenaAmount >= minArenaAmount && lockTimer > minLockTimer , "Invalid arenaAmount or lockTimer");
         uint256 creationTime = block.timestamp;
@@ -125,7 +155,6 @@ contract ArenaGround {
         iconInCharge
         );
         currentCall[dumbyArenaCount] = block.timestamp;
-        bigGiveAwayAim;
     }
 
     /// to participate in arrena and also used by winner to claim arena victory
@@ -144,18 +173,9 @@ contract ArenaGround {
             
             iconValues[msg.sender] += arenaToJoin.currentArenaValue; // claim price
 
-            if (arenaToJoin.currentArenaValue == arenaToJoin.arenaAmount  ){
-                uint256 reward; // to encourage creating an arena which earns reward if no icons join
-                if (arenaToJoin.bigGiveAwayAim){ 
-                reward = fixedNonArenaJoinRewardCap * big / 1e8;
-                fixedNonArenaJoinRewardCap -= reward;
-                iconValues[msg.sender] += reward; 
-                }
-                else{
-                reward = fixedNonArenaJoinRewardCap * small / 1e8;
-                fixedNonArenaJoinRewardCap -= reward;
-                iconValues[msg.sender] += reward; 
-                }
+            if (arenaToJoin.currentArenaValue == arenaToJoin.arenaAmount && fixedNonArenaJoinRewardCap >= fixedNonArenaJoinReward ){
+                fixedNonArenaJoinRewardCap -= fixedNonArenaJoinReward;
+                iconValues[msg.sender] += fixedNonArenaJoinReward; // to encourage creating an arena which earns reward if no icons join
             }
             require ( msg.sender == arenaToJoin.iconInCharge , "Unauthroized Icon" );
             delete arena[arenaNumber]; /// delete arena after winning icon is settled 
@@ -174,8 +194,7 @@ contract ArenaGround {
         newCurrentArenaValue,
         newCreationTimer,
         newLockTimer ,
-        msg.sender ,
-        arenaToJoin.bigGiveAwayAim
+        msg.sender
         );
 
         iconValues[msg.sender] -= amount;
@@ -184,14 +203,6 @@ contract ArenaGround {
         currentCall[arenaNumber] = block.timestamp;
 
     }
-
-    function DonateToGiveAway(
-        uint256 amount
-        ) public {
-        token.safeTransferFrom(msg.sender, address(this), amount);
-        fixedNonArenaJoinRewardCap += amount;
-    }
-
     ///// Views
     function checkArenaAffairs(
         uint256 arenaNumber
@@ -201,13 +212,40 @@ contract ArenaGround {
        function ownerView() public view returns (address) {
         return owner;
     }
+     // Convert ETH to OP value
+    function ethToOp(uint256 ethAmount) public view returns (uint256) {
+        // Fetch the ETH price in USD
+        (,int ethPrice,,,) = ethPriceFeed.latestRoundData();
+
+        // Fetch the OP price in USD
+        (,int opPrice,,,) = opPriceFeed.latestRoundData();
+        
+        // Calculate the equivalent OP value based on ETH price in USD and OP price in USD
+        require(ethPrice > 0 && opPrice > 0, "Invalid price data");
+
+        // Perform the conversion (ethAmount * opPrice) / ethPrice
+        return uint256((ethAmount * uint256(opPrice)) / uint256(ethPrice));
+    }
+
+    // Convert OP to ETH value
+    function opToEth(uint256 opAmount) public view returns (uint256) {
+        // Fetch the ETH price in USD
+        (,int ethPrice,,,) = ethPriceFeed.latestRoundData();
+
+        // Fetch the OP price in USD
+        (,int opPrice,,,) = opPriceFeed.latestRoundData();
+        
+        // Calculate the equivalent ETH value based on OP price in USD and ETH price in USD
+        require(ethPrice > 0 && opPrice > 0, "Invalid price data");
+
+        // Perform the conversion (opAmount * ethPrice) / opPrice
+        return uint256((opAmount * uint256(ethPrice)) / uint256(opPrice));
+    }
 
     /////Admin Setters 
-    function setBigSmallRewardPercent(uint256 _big, uint256 _small ) external{
+    function setFixedNonArenaJoinReward(uint256 _fixedNonArenaJoinReward) external{
         require(owner == msg.sender, "Unauthorized Caller");
-        require ( _big < 9e7 && small < 5e6, "GiveAwayReward Error");
-        big = _big;
-        small = _small;
+        fixedNonArenaJoinReward = _fixedNonArenaJoinReward;
     }
     function setPriceClaimDelay(uint256 _priceClaimDelay) external{
         require(owner == msg.sender, "Unauthorized Caller");
