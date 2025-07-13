@@ -12,7 +12,7 @@ contract DeployArenaGround is Script {
         vm.startBroadcast();
 
         // Deploy the contract
-        ArenaGround arena = new ArenaGround(31536000); // example constructor args
+        ArenaGround arena = new ArenaGround(63072000, 0x4200000000000000000000000000000000000042); // 2 years till lunch
 
         // End deployment
         //vm.stopBroadcast();
