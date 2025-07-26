@@ -21,7 +21,7 @@ contract ArenaTest is Test {
     address alex;
     address bob;
 
-    /// mapping(uint256 => ArenaInfo) public arena;
+    /// mapping(uint256 => ArenaInfo) public checkArenaAffairs;
     mapping(address => uint256) public iconValues;
     mapping(uint256 => uint256) public currentCall;
     uint256 public arenaCount;
@@ -37,30 +37,34 @@ contract ArenaTest is Test {
         // mg.sender not same as address (this), owner is address(this)
         owner = arenaGround.ownerView();
         
-
-        // vm.prank(owner);
-        // arenaGround.activateWhitelist(address(1),  100e18);
-        // vm.prank(owner);
-        // arenaGround.activateWhitelist(address(2),  10e18);
-        vm.prank(owner);
-        arenaGround.activateWhitelist(address(3),  10e18);
-        arenaGround.activateWhitelist(address(4),  10e18);
-        arenaGround.activateWhitelist(address(5),  10e18);
         topmark = address(1);
         alex = address(2);
         bob = address(3);
 
         mockOP.mint(topmark, 1000e18 );
-        mockOP.mint(owner, 1000e18 );
+        mockOP.mint(owner, 2000_000e18 );
         mockOP.mint(alex, 100e18 );
 
         vm.deal(msg.sender, 200e18);
-        vm.deal(owner, 200e18);   
+        vm.deal(owner, 1000_000e18); 
 
+        vm.prank(address(3));
+        arenaGround.ApplyForWhitelisting();
+         vm.prank(address(4));
+        arenaGround.ApplyForWhitelisting();
+         vm.prank(address(5));
+        arenaGround.ApplyForWhitelisting();
+
+        vm.prank(owner);
+        mockOP.approve(address(arenaGround), 1000_000e18);
+        arenaGround.deposit( 1000_000e18 ); 
+        arenaGround.activateWhitelist(address(3),  10e18);
+        arenaGround.activateWhitelist(address(4),  10e18);
+        arenaGround.activateWhitelist(address(5),  10e18);
     }
 
     function test_CheckCheck() public view {
-        assertEq(arenaGround.fixedNonArenaJoinRewardCap(), 0); 
+        assertEq(arenaGround.fixedNonArenaJoinRewardCap(), 999_970e18 ); 
          
     }
     function test_deposit() public {
@@ -75,7 +79,7 @@ contract ArenaTest is Test {
         mockOP.approve(address(arenaGround), 2e18);
          vm.prank(owner);
         arenaGround.deposit(2e18);
-        assertEq(arenaGround.fixedNonArenaJoinRewardCap(), 2e18); 
+        assertEq(arenaGround.fixedNonArenaJoinRewardCap(), 2e18 + 999_970e18); 
          
     }
      function test_withdraw() public {
@@ -95,9 +99,8 @@ contract ArenaTest is Test {
     }
      function test_ArenaWinBigOrSamll() public {
         vm.prank(owner);
-        mockOP.approve(address(arenaGround), 1000e18);
-         vm.prank(owner);
-        arenaGround.deposit(1000e18);
+         mockOP.approve(address(arenaGround), 30e18);
+        arenaGround.deposit(30e18); // fixedNonArenaJoinRewardCap now 1000_000
 
         vm.prank(topmark);
          mockOP.approve(address(arenaGround), 3e18);
@@ -118,8 +121,8 @@ contract ArenaTest is Test {
 
         vm.prank(alex);
         arenaGround.JoinArena( 1 , 1e17,"");
-        assertEq(arenaGround.fixedNonArenaJoinRewardCap(), 100e18); 
-        assertEq( arenaGround.iconValues(alex) , 3e18+ 900e18 );// user has made big profit
+        assertEq(arenaGround.fixedNonArenaJoinRewardCap(), 100_000e18); // down by 90%
+        assertEq( arenaGround.iconValues(alex) , 3e18+ 900_000e18 );// user has made this big profit
 
         // Topmark small win
         vm.prank(topmark);
@@ -129,14 +132,14 @@ contract ArenaTest is Test {
 
         vm.prank(topmark);
         arenaGround.JoinArena( 1 , 1e17,"");
-        assertEq(arenaGround.fixedNonArenaJoinRewardCap(), 999e17); 
-        assertEq( arenaGround.iconValues(topmark) , 3e18+ 1e17 ); //topmark made small profit
+        assertEq(arenaGround.fixedNonArenaJoinRewardCap(), 99_900e18); //down by 0.1%
+        assertEq( arenaGround.iconValues(topmark) , 3e18+ 100e18 ); //topmark made small profit
     }
      function test_ArenaNoEarlyWinBigOrSamll() public {
-        vm.prank(owner);
-        mockOP.approve(address(arenaGround), 1000e18);
-         vm.prank(owner);
-        arenaGround.deposit(1000e18);
+        // vm.prank(owner);
+        // mockOP.approve(address(arenaGround), 1000e18);
+        //  vm.prank(owner);
+        // arenaGround.deposit(1000e18);
 
         vm.prank(topmark);
          mockOP.approve(address(arenaGround), 3e18);
@@ -168,7 +171,7 @@ contract ArenaTest is Test {
 
         assertEq (arenaGround.arenaCount() , 0);
         assertEq( arenaGround.iconValues(topmark) , 3e18+ 1e17 * 11 ); //topmark made profit
-        assertEq(arenaGround.fixedNonArenaJoinRewardCap(), 1000e18); 
+        assertEq(arenaGround.fixedNonArenaJoinRewardCap(), 999_970e18); 
          
     }
     function test_DonateToGiveAway() public {
@@ -178,7 +181,7 @@ contract ArenaTest is Test {
         arenaGround.deposit(1e18);
          vm.prank(topmark);
         arenaGround.DonateToGiveAway(2e18);
-        assertEq(arenaGround.fixedNonArenaJoinRewardCap(), 2e18);   
+        assertEq(arenaGround.fixedNonArenaJoinRewardCap(), 2e18 + 999_970e18);   
     }
     function test_ArenaCount() public {
         vm.prank(alex);
@@ -216,129 +219,170 @@ contract ArenaTest is Test {
         assertGt (arenaGround.checkAllArenaAffairs()[arenaGround.arenaCount()-1].arenaAmount,0 );
     }
 
-//     function test_DepositAndWithdraw() public {
-//         //TODO test with eth or token deposit
-//         vm.prank(msg.sender);
-//         arenaGround.deposit{value:30e18}(30e18);
-//         vm.prank(msg.sender);
-//         arenaGround.withdraw(23e18, msg.sender);
-//         assertEq( arenaGround.iconValues(address(arenaGround)) ,7e18 );
-//     }
+    // function test_DepositAndWithdraw() public {
+    //     //TODO test with eth or token deposit
+    //     vm.prank(msg.sender);
+    //     arenaGround.deposit{value:30e18}(30e18);
+    //     vm.prank(msg.sender);
+    //     arenaGround.withdraw(23e18, msg.sender);
+    //     assertEq( arenaGround.iconValues(address(arenaGround)) ,7e18 );
+    // }
 
-//     function test_SetArena() public {
-//         assertEq( arenaGround.iconValues(topmark), 100e18 );
-//         vm.prank(topmark);
-//         arenaGround.SetArena(20e18 , 600 ,"");
-//         assertEq( arenaGround.iconValues(topmark), 80e18 );
+    function test_SetArena() public {
+        assertEq( arenaGround.iconValues(topmark), 0 );
+        vm.startPrank(topmark);
+        mockOP.approve(address(arenaGround), 100e18);
+        arenaGround.deposit(100e18);
+        arenaGround.SetArena(20e18 , 25 hours , false, "");
+        assertEq( arenaGround.iconValues(topmark), 80e18 );
 
-//         vm.prank(topmark);
-//         arenaGround.SetArena(40e18 , 600 ,"");
-//         assertEq( arenaGround.iconValues(topmark), 40e18 );
-//         assertEq( arenaGround.arenaCount(), 2 );
-//         (,uint256 currentArenaValue,,,) =  arenaGround.arena(1);
-//         assertEq( currentArenaValue, 20e18 );
-//         (,currentArenaValue,,,) =  arenaGround.arena(2);
-//         assertEq( currentArenaValue, 40e18 );
-//     }
-//        function test_JoinArenaIconWinAndClaim() public {
-//         assertEq( arenaGround.iconValues(bob) , 10e18 );
-//         vm.prank(topmark);
-//         arenaGround.SetArena( 5e18 , 31 ,"");
-//         vm.warp(block.timestamp + 1);
-//         vm.prank(topmark);
-//         arenaGround.JoinArena( 1 , 5e18 ,"");
-//         vm.warp(block.timestamp + 1);
-//         vm.prank(topmark);
-//         arenaGround.JoinArena( 1 , 5e18 ,"");
-//         vm.warp(block.timestamp + 1);
-//         vm.prank(topmark);
-//         arenaGround.JoinArena( 1 , 5e18 ,"");
-//         vm.warp(block.timestamp + 1);
+        arenaGround.SetArena(40e18 , 25 hours  , false , "");
+        vm.stopPrank();
+        assertEq( arenaGround.iconValues(topmark), 40e18 );
+        assertEq( arenaGround.arenaCount(), 2 );
+        
+        uint256 currentArenaValue =  arenaGround.checkArenaAffairs(1).currentArenaValue;
+        assertEq( currentArenaValue, 20e18 );
+        uint256 currentArenaValue2 =  arenaGround.checkArenaAffairs(2).currentArenaValue;
+        assertEq( currentArenaValue2, 40e18 );
+    }
+       function test_JoinArenaIconWinAndClaim() public {
+        assertEq( arenaGround.iconValues(bob) , 10e18 );
+        vm.prank(owner);
+        arenaGround.setMinLockTimer( 30);
 
-//         vm.prank(alex);
-//         arenaGround.JoinArena( 1 , 5e18 ,"");
-//         vm.warp(block.timestamp + 1);
-//         vm.prank(bob);
-//         arenaGround.JoinArena( 1 , 5e18 ); // by now locktime would have move from 31 to 0, bob is winn,""er
-//         // time most elaspe to avoid flashloan
-//         vm.warp(block.timestamp + 1001);
-//          vm.prank(bob);
-//         arenaGround.JoinArena( 1 , 0 ); // pass in any amount to claim pri,""ce
-//         assertEq( arenaGround.iconValues(bob) , 35e18 );
-//     }
-//     function test_JoinArenaTimeExpireForArenaSetter() public {
-//         assertEq( arenaGround.iconValues(bob) , 10e18 );
-//         vm.prank(owner); 
-//         arenaGround.deposit{value:150e18}(150e18);// value donated to contract by owner to encourage participation
-//         vm.prank(owner);
-//         arenaGround.setFixedNonArenaJoinReward(100e14);
+        vm.startPrank(topmark);
+        mockOP.approve(address(arenaGround), 100e18);
+        arenaGround.deposit(100e18);
+        arenaGround.SetArena( 5e18 , 31, true ,"");
+        vm.warp(block.timestamp + 1);
+        vm.stopPrank();
 
-//         vm.prank(bob);
-//         arenaGround.SetArena(5e18 , 600 ,"");
-//         vm.warp(block.timestamp + 1001);
+        
+        vm.startPrank(alex);
+        mockOP.approve(address(arenaGround), 10e18);
+        arenaGround.deposit(10e18);
+        arenaGround.JoinArena( 1 , 5e18 ,""); // alex sabotages topmark to prevent him winning contract big reward
+        vm.warp(block.timestamp + 1);
+        vm.stopPrank();
 
-//         vm.prank(bob);
-//         arenaGround.JoinArena( 1 , 0 ); // pass in any amount to claim price, it would not be lo,""st
-//         assertEq( arenaGround.iconValues(bob) , 10e18 + 100e14 ); // Icon has made profit
-//         vm.prank(bob);
-//         arenaGround.withdraw(10e18 + 100e14, bob); //bob wins big
-//     }
-//     function test_JoinArenaTimeExpireForArenaIcon() public {
-//          assertEq( arenaGround.iconValues(bob) , 10e18 );
-//         vm.prank(topmark);
-//         arenaGround.SetArena(5e18 , 600 ,"");
-//         vm.warp(block.timestamp + 599);
-//         vm.prank(alex);
-//         arenaGround.JoinArena( 1 , 5e18 ,"");
-//         vm.warp(block.timestamp + 1);
-//         vm.prank(bob);
-//         arenaGround.JoinArena( 1 , 5e18 ,"");
-//         // time most elaspe to avoid flashloan
-//         vm.warp(block.timestamp + 151); /// bob is now winner but cant claim yet due to flash time delay
-//         vm.warp(block.timestamp + 851);
-//          vm.prank(bob);
-//         arenaGround.JoinArena( 1 , 0 ); // pass in any amount to claim price, it would not be lo,""st
-//         assertEq( arenaGround.iconValues(bob) , 20e18 );
-//     }
+        vm.prank(topmark);
+        arenaGround.JoinArena( 1 , 5e18 ,""); // sabotage continues
+        vm.warp(block.timestamp + 1);
+        vm.prank(topmark);
+        arenaGround.JoinArena( 1 , 5e18 ,"");
+        vm.warp(block.timestamp + 1);
 
-//     function test_JoinArenaAttackerCantCallManyAtOnceSimultaneouslyToWin() public {
-//         vm.prank(bob);
-//         arenaGround.SetArena(5e18 , 31 ,"");
-//         vm.warp(block.timestamp + 1);
+        vm.prank(alex);
+        arenaGround.JoinArena( 1 , 5e18 ,"");
+        vm.warp(block.timestamp + 1);
+        vm.prank(bob);
+        arenaGround.JoinArena( 1 , 5e18, "" ); // by now locktime would have move from 31 to 0, bob is the winner
+        // time must elaspe to avoid flashloan
+        vm.warp(block.timestamp + 1001);
+         vm.prank(bob);
+        arenaGround.JoinArena( 1 , 0 , ""); // pass in any amount to claim price
+        assertEq( arenaGround.iconValues(bob) , 35e18 );
+    }
+    function test_JoinArenaTimeExpireForArenaSetter() public {
+        assertEq( arenaGround.iconValues(bob) , 10e18 );
+        vm.prank(owner); 
+        mockOP.approve(address(arenaGround), 30e18);
+        arenaGround.deposit(30e18);// value donated to contract by owner to encourage participation
+        vm.prank(owner);
+        arenaGround.setMinLockTimer( 30);
 
-//         vm.prank(topmark); //attacker with big funds
-//         arenaGround.JoinArena( 1 , 5e18 ); // pass in any amount to claim price, it would not be lo,""st
-//         //vm.warp(block.timestamp + 1);
-//         vm.expectRevert();
-//         vm.prank(topmark); 
-//         arenaGround.JoinArena( 1 , 5e18 ); // pass in any amount to claim price, it would not be lo,""st
-//         vm.expectRevert();
-//         vm.prank(topmark); 
-//         arenaGround.JoinArena( 1 , 5e18 ,"");
-//     }
+        vm.prank(bob);
+        arenaGround.SetArena(5e18 , 600 , true, "");
+        vm.warp(block.timestamp + 1001);
 
-//  function test_Fee() public {
-//         assertEq( arenaGround.iconValues(bob) , 10e18 );
-//         vm.prank(owner); 
-//         arenaGround.setFee( 1e5);
-//         vm.prank(owner);
-//         arenaGround.deposit{value:150e18}(150e18);// value donated to contract by owner to encourage participation
-//         vm.prank(owner);
-//         arenaGround.setFixedNonArenaJoinReward(100e14);
+        vm.prank(bob);
+        arenaGround.JoinArena( 1 , 5e18 , "" ); // pass in any amount to claim price, it would not be lost
+        assertEq( arenaGround.iconValues(bob) , 10e18 + 900_000e18 ); // Icon has made profit
+        vm.prank(bob);
+        arenaGround.withdraw(30e18 + 900_000e18, bob); //bob wins big
+    }
+    function test_JoinArenaTimeExpireForArenaIcon() public {
+        assertEq( arenaGround.iconValues(bob) , 10e18 );
+        vm.prank(owner);
+        arenaGround.setMinLockTimer( 30);
 
-//         vm.prank(bob);
-//         arenaGround.SetArena(5e18 , 600 ,"");
-//         vm.warp(block.timestamp + 1001);
+        vm.startPrank(topmark);
+        mockOP.approve(address(arenaGround), 10e18);
+        arenaGround.deposit(10e18);
+        arenaGround.SetArena(5e18 , 600, false ,"");
+        vm.stopPrank();
 
-//         vm.prank(bob);
-//         arenaGround.JoinArena( 1 , 0 ); // pass in any amount to claim price, it would not be lo,""st
-//         assertEq( arenaGround.iconValues(bob) , 10e18 + 100e14 ); // Icon has made profit
-//         vm.prank(bob);
-//         arenaGround.withdraw(10e18 + 100e14 - ((10e18 + 100e14)/10 ) , bob); //bob wins big
-//     }
+        vm.startPrank(alex);
+        mockOP.approve(address(arenaGround), 10e18);
+        arenaGround.deposit(10e18);
+        vm.warp(block.timestamp + 599);
+        arenaGround.JoinArena( 1 , 5e18 ,"");
+        vm.stopPrank();
 
-//     function testFuzz_SetNumber(uint256 x) public {
-//        // counter.setNumber(x);
-//         //assertEq(counter.number(), x);
-//     } 
+        vm.warp(block.timestamp + 1);
+        vm.prank(bob);
+        arenaGround.JoinArena( 1 , 5e18 ,"");
+        // enough time must elaspe to avoid flashloan
+        vm.warp(block.timestamp + 151); /// bob is now winner but cant claim yet due to flash time delay
+        vm.warp(block.timestamp + 851);
+         vm.prank(bob);
+        arenaGround.JoinArena( 1 , 5e2, "" ); // pass in any amount to claim price, it would not be lost
+        assertEq( arenaGround.iconValues(bob) , 20e18 );
+    }
+
+    function test_JoinArenaAttackerCantCallManyAtOnceSimultaneouslyToWin() public {
+        vm.prank(owner);
+        arenaGround.setMinLockTimer( 30);
+
+        vm.prank(bob);
+        arenaGround.SetArena(5e18 , 31 , false, "");
+        vm.warp(block.timestamp + 1);
+
+        vm.startPrank(topmark); //attacker with big funds
+        mockOP.approve(address(arenaGround), 30e18);
+        arenaGround.deposit(30e18);
+        arenaGround.JoinArena( 1 , 5e18 , "" ); 
+        vm.stopPrank();
+
+        // caller must wait atleast a second to call again
+        vm.expectRevert();
+        vm.prank(topmark); 
+        arenaGround.JoinArena( 1 , 5e18 ,"" );
+        vm.expectRevert();
+        vm.prank(topmark); 
+        arenaGround.JoinArena( 1 , 5e18 ,"");
+    }
+
+ function test_Fee() public {
+        vm.prank(owner);
+        arenaGround.setMinLockTimer( 30);
+
+        assertEq( arenaGround.iconValues(bob) , 10e18 );
+        vm.prank(owner); 
+        arenaGround.setFee( 1e5);
+        vm.prank(owner);
+        mockOP.approve(address(arenaGround), 30e18);
+        vm.prank(owner);
+        arenaGround.deposit(30e18);// value donated to contract by owner as giveaway on top previous 999,970e18
+
+        vm.prank(bob);
+        arenaGround.SetArena(5e18 , 600, true, "");
+        vm.warp(block.timestamp + 1001);
+
+        vm.prank(bob);
+        arenaGround.JoinArena( 1 , 50000000e18, "" ); // pass in any amount to claim price, it would not be lost
+        assertEq( arenaGround.iconValues(bob) , 10e18 + 900_000e18 ); // Icon has made profit
+        assertEq(arenaGround.fixedNonArenaJoinRewardCap(), 100_000e18);
+        vm.prank(bob);
+
+        vm.warp(block.timestamp + 30 days); // since bob is whitelisted, he can only withdraw after lunch time has elapsed
+        arenaGround.withdraw(10e18 + 900_000e18 , bob); //bob wins big
+        assertEq( arenaGround.iconValues(bob) , 0 );
+
+        assertEq(arenaGround.accumulatedFee(), (10e18 + 900_000e18)/10);
+        vm.expectRevert(); // bob has emptied his balance
+        vm.prank(bob); 
+        arenaGround.withdraw( 1 ,bob );
+    }
 }

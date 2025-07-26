@@ -9,7 +9,8 @@ contract ArenaGround {
     /* 
     Hisimi ArenaGround
 
-    This is a Giveaway Contract that aims to gift out funds to users by setting or joining arena and being alone inside the arena till the arena Lock time period expires
+    This is a Giveaway Contract that aims to gift out funds to users by setting or joining arena and being alone inside the arena till the arena Lock time period expires.
+Basically you can stop others from winning, others can stop you from winning, if no one stops you, you can win it all. 
     Major functions:
     1. Deposit: for users to increase their icon value, icon value is used to enter arenas with as low as a cent worth of OP, this is just to prevent sybil attacks and ensure participants are actual users that need this giveaway and not bots. Note, users should give contract transfer approval before token deposit can go through.
     2. withdraw: For users to withdraw their funds while paying a little fragment as contract fee depending on public fee set by contract owner between 0% to 5%
@@ -20,6 +21,14 @@ contract ArenaGround {
     */
 
     using SafeERC20 for IERC20;
+
+    //// Events
+    event Deposited(address indexed user, uint256 amount);
+    event Withdrawn(address indexed user, uint256 amount, uint256 fee);
+    event ArenaCreated(uint256 indexed arenaId, address indexed creator, uint256 amount, uint256 lockTime, string message);
+    event ArenaJoined(uint256 indexed arenaId, address indexed joiner, uint256 newLockTime);
+    event ArenaWon(uint256 indexed arenaId, address indexed winner, uint256 reward);
+    event OwnershipTransferred(address indexed newOwner);
     
     struct ArenaInfo {
         uint256 arenaAmount;
@@ -62,6 +71,11 @@ contract ArenaGround {
     mapping (address => bool) whitelistedAddresses;
     // to ensure only users that want to be whitelisted to prevent owner from locking users funds in contract
     mapping (address => bool) applyForWhitelist;
+
+    // keeps of address donating to giveway as they are entitled to percentage of available shares, 1e8 max 
+    uint256 public availableFeeShares;
+    mapping (address => uint256 ) public feeShares;
+
     address owner ;
 
     IERC20 public token;  // Optimism token (OP)
@@ -75,6 +89,7 @@ contract ArenaGround {
         owner = msg.sender; 
         minLockTimer = 24 hours;
         token = IERC20(_tokenAddress);  // Set token address for Optimism (OP token)
+        feeShares[msg.sender] =  1e8; // creator gets 100% by default and would be reduced as donations are made to contract
     }
   
     function deposit( uint256 amount ) public payable {
@@ -85,25 +100,26 @@ contract ArenaGround {
              return ;
         }
         iconValues[msg.sender] += amount;
+        emit Deposited(msg.sender, amount);
     }
     function withdraw(uint256 amount, address recipient) public {
          //OP withdrawal
             if (recipient == address(0)) recipient = msg.sender ;
-            if(msg.sender == owner){
-            require(amount <= accumulatedFee + fixedNonArenaJoinRewardCap, "Owner cant Withdraw Users Fund");
-                if( amount <= accumulatedFee){
-                 accumulatedFee -= amount;
-                }else{
-                fixedNonArenaJoinRewardCap -= amount;
-                }
+                if(msg.sender == owner){
+                    require(amount <= accumulatedFee + fixedNonArenaJoinRewardCap, "Owner cant Withdraw Users Fund");
+                    if( amount <= accumulatedFee){
+                      accumulatedFee -= amount;
+                     }else{
+                    fixedNonArenaJoinRewardCap -= amount;
+                     }
 
-            token.safeTransfer(recipient, amount); // Withdraw fee in OP token (ERC-20)
-                if (address(this).balance > 0){ // to withdraw contract donations and accidental native tokens
+                    token.safeTransfer(recipient, amount); // Withdraw fee in OP token (ERC-20)
+                    if (address(this).balance > 0){ // to withdraw contract donations and accidental native tokens
                      (bool success, ) = recipient.call{value: address(this).balance}("");
                     require(success, "Transfer failed.");
+                    }
+                return ;
                 }
-            return ;
-            }
 
         //whitelisted addresses can withdraw untill lunch time but can participate in giveaways like everyother users untill lunch time
         if ( whitelistedAddresses[msg.sender] && block.timestamp < launchTime ) return; 
@@ -120,6 +136,7 @@ contract ArenaGround {
             require(token.balanceOf(address(this)) >= (amount-feeValue), "Insufficient OP balance");
             token.safeTransfer(recipient, (amount-feeValue));
             }
+        emit Withdrawn(msg.sender, amount, feeValue);
     }
 
     /*
@@ -161,6 +178,7 @@ contract ArenaGround {
         _message
         );
         currentCall[dumbyArenaCount] = block.timestamp;
+        emit ArenaCreated( dumbyArenaCount, iconInCharge, arenaAmount, lockTimer , _message);
     }
 
     /// to participate in arrena and also used by winner to claim arena victory
@@ -197,6 +215,8 @@ contract ArenaGround {
                 iconValues[msg.sender] += reward; 
                 leaderBoardValues[msg.sender] += reward;
                 }
+
+                emit ArenaWon(arenaNumber, msg.sender, reward);
             }
             else{
                 leaderBoardValues[msg.sender] += arenaToJoin.currentArenaValue - arenaToJoin.arenaAmount;
@@ -204,6 +224,7 @@ contract ArenaGround {
             require ( msg.sender == arenaToJoin.iconInCharge , "Unauthroized Icon" );
             delete arena[arenaNumber]; /// delete arena after winning icon is settled 
             arenaCount -= 1; //update global count
+
             return ;
         }
 
@@ -227,15 +248,37 @@ contract ArenaGround {
         //prevent multiple call at a goal to prevent attacker with mutiple entry
         require ( block.timestamp > currentCall[arenaNumber] , "multiple call in single Seconds");
         currentCall[arenaNumber] = block.timestamp;
+
+        emit ArenaJoined(arenaNumber, msg.sender, newLockTimer);
     }
 
     function DonateToGiveAway(
         uint256 amount
-        ) public {
+    ) public {
         token.safeTransferFrom(msg.sender, address(this), amount);
         fixedNonArenaJoinRewardCap += amount;
+            if(availableFeeShares >  amount / 1e18){
+                availableFeeShares -= amount / 1e18;
+                feeShares[owner] -= amount / 1e18;
+                feeShares[msg.sender] += amount / 1e18;
+            }
+            else{
+                feeShares[owner] -= availableFeeShares;
+                feeShares[msg.sender] += availableFeeShares;
+                availableFeeShares = 0;
+            }
     }
-     // to prevent owner from locking users fund using whitelist function, so only addresses that apply get this opporn=tunity
+
+    function transferFeeShares(
+        uint256 amount,
+        address to
+    ) public {
+        require(to != address(0), "Invalid address");
+        feeShares[msg.sender] -= amount;
+        feeShares[to] += amount;
+    }
+
+     // to prevent owner from locking users fund using whitelist function, so only addresses that apply get this opportunity
     function ApplyForWhitelisting() public{ 
         applyForWhitelist[msg.sender] = true;
     }
@@ -281,6 +324,11 @@ contract ArenaGround {
         require (_newfee <= 1e5,"Fee above 10%");
         fee = _newfee;
     }
+    function setAvailableFeeShares(uint256 _newAvailableFeeShares) external{
+        require(owner == msg.sender, "Unauthorized Caller");
+        require (_newAvailableFeeShares <= 1e8,"Fee above 100%");
+        availableFeeShares = _newAvailableFeeShares;
+    }
     function setMinLockTimer(uint256 _newminLockTimer) external{
         require(owner == msg.sender, "Unauthorized Caller");
         minLockTimer = _newminLockTimer;
@@ -293,6 +341,8 @@ contract ArenaGround {
         require(owner == msg.sender, "Unauthorized Caller");
         require(applyForWhitelist[whitelist]);
         require(block.timestamp < launchTime);
+        //owner is a trusted role which will ensure this will not be taken advantage of to drain reward
+        // value will be determined by governance as protocol progress
         require(value < (fixedNonArenaJoinRewardCap/100) , "excess value for Whitelist");
 
         whitelistedAddresses[whitelist] = true;
@@ -302,6 +352,7 @@ contract ArenaGround {
     function setNewOwner(address _newOwner) external{
         require(owner == msg.sender, "Unauthorized Caller");
         owner = _newOwner;
+        emit OwnershipTransferred(_newOwner);
     }
     receive() external payable{}
 }
